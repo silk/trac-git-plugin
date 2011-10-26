@@ -18,6 +18,7 @@ setup(name='TracGit',
       """,
       packages=['tracext', 'tracext.git'],
       namespace_packages=['tracext'],
-      entry_points = {'trac.plugins': 'git = tracext.git.git_fs'},
+      entry_points = {'trac.plugins': ['git = tracext.git.git_fs',
+                                       'git_cache = tracext.git.git_cache_sync']},
       package_data={'': ['COPYING','README']}
 )

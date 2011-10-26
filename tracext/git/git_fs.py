@@ -6,7 +6,7 @@
 
 from trac.core import *
 from trac.util import TracError, shorten_line
-from trac.util.datefmt import FixedOffset, to_timestamp, format_datetime
+from trac.util.datefmt import FixedOffset, to_timestamp, format_datetime, to_utimestamp
 from trac.util.text import to_unicode
 from trac.versioncontrol.api import \
      Changeset, Node, Repository, IRepositoryConnector, NoSuchChangeset, NoSuchNode, \
@@ -28,6 +28,10 @@ if not sys.version_info[:2] >= (2, 5):
 
 import PyGIT
 
+_kindmap = {'D': Node.DIRECTORY, 'F': Node.FILE}
+_actionmap = {'A': Changeset.ADD, 'C': Changeset.COPY,
+              'D': Changeset.DELETE, 'E': Changeset.EDIT,
+              'M': Changeset.MOVE}
 
 class GitCachedRepository(CachedRepository):
     """
@@ -52,6 +56,44 @@ class GitCachedRepository(CachedRepository):
 
     def get_changeset(self, rev):
         return GitCachedChangeset(self, self.normalize_rev(rev), self.env)
+
+    def clear(self):
+        pass
+
+    def sync(self, feedback=None, clean=False):
+        self.log.info("Not doing sync. Use the NewWay(tm)")
+        pass
+
+    def add_changesets(self, revs):
+        self.log.info("Addind changesets: %s" % revs.__str__())
+        kindmap = dict(zip(_kindmap.values(), _kindmap.keys()))
+        actionmap = dict(zip(_actionmap.values(), _actionmap.keys()))
+        with self.env.db_transaction as db:
+            for rev in revs:
+                rev = self.repos.normalize_rev(rev)
+                cset = self.repos.get_changeset(rev)
+                srev = self.db_rev(cset.rev)
+                db("""INSERT INTO revision
+                        (repos, rev, time, author, message)
+                      VALUES (%s, %s, %s, %s, %s)
+                      """, (self.id, rev, to_utimestamp(cset.date),
+                            cset.author, cset.message))
+                for path, kind, action, bpath, brev in cset.get_changes():
+                    self.log.debug("Caching node change in [%s]: %r",
+                                   srev,
+                                   (path, kind, action, bpath, brev))
+                    kind = kindmap[kind]
+                    action = actionmap[action]
+                    db("""INSERT INTO node_change
+                            (repos, rev, path, node_type, change_type,
+                             base_path, base_rev)
+                          VALUES (%s, %s, %s, %s, %s, %s, %s)
+                          """, (self.id, srev, path, kind, action, bpath,
+                                brev))
+        pass
+
+    def parent_revs(self, rev):
+        return self.repos.parent_revs(rev)
 
 
 class GitCachedChangeset(CachedChangeset):
