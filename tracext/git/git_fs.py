@@ -61,7 +61,7 @@ class GitCachedRepository(CachedRepository):
         pass
 
     def sync(self, feedback=None, clean=False):
-        self.log.info("Not doing sync. Use the NewWay(tm)")
+        self.log.debug("Not doing sync. Using the NewWay(tm). See commit hook.")
         pass
 
     def add_changesets(self, revs):
